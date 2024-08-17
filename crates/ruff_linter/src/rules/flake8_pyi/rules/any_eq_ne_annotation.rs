@@ -4,6 +4,7 @@ use ruff_diagnostics::{AlwaysFixableViolation, Diagnostic, Edit, Fix};
 use ruff_macros::{derive_message_formats, violation};
 use ruff_text_size::Ranged;
 
+use super::helpers::match_maybe_stringized_annotation;
 use crate::checkers::ast::Checker;
 
 /// ## What it does
@@ -78,23 +79,27 @@ pub(crate) fn any_eq_ne_annotation(checker: &mut Checker, name: &str, parameters
         return;
     }
 
-    if semantic.match_typing_expr(annotation, "Any") {
-        let mut diagnostic = Diagnostic::new(
-            AnyEqNeAnnotation {
-                method_name: name.to_string(),
-            },
-            annotation.range(),
-        );
-        // Ex) `def __eq__(self, obj: Any): ...`
-        diagnostic.try_set_fix(|| {
-            let (import_edit, binding) = checker.importer().get_or_import_builtin_symbol(
-                "object",
-                annotation.start(),
-                semantic,
-            )?;
-            let binding_edit = Edit::range_replacement(binding, annotation.range());
-            Ok(Fix::safe_edits(binding_edit, import_edit))
-        });
-        checker.diagnostics.push(diagnostic);
+    if !match_maybe_stringized_annotation(annotation, checker.locator(), |expr| {
+        semantic.match_typing_expr(expr, "Any")
+    }) {
+        return;
     }
+
+    let mut diagnostic = Diagnostic::new(
+        AnyEqNeAnnotation {
+            method_name: name.to_string(),
+        },
+        annotation.range(),
+    );
+    // Ex) `def __eq__(self, obj: Any): ...`
+    diagnostic.try_set_fix(|| {
+        let (import_edit, binding) = checker.importer().get_or_import_builtin_symbol(
+            "object",
+            annotation.start(),
+            semantic,
+        )?;
+        let binding_edit = Edit::range_replacement(binding, annotation.range());
+        Ok(Fix::safe_edits(binding_edit, import_edit))
+    });
+    checker.diagnostics.push(diagnostic);
 }

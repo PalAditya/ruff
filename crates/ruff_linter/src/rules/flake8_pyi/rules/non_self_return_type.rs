@@ -7,7 +7,9 @@ use ruff_python_ast::identifier::Identifier;
 use ruff_python_semantic::analyze;
 use ruff_python_semantic::analyze::visibility::{is_abstract, is_final, is_overload};
 use ruff_python_semantic::{ScopeKind, SemanticModel};
+use ruff_source_file::Locator;
 
+use super::helpers::match_maybe_stringized_annotation;
 use crate::checkers::ast::Checker;
 
 /// ## What it does
@@ -156,7 +158,7 @@ pub(crate) fn non_self_return_type(
 
     // In-place methods that are expected to return `Self`.
     if is_inplace_bin_op(name) {
-        if !is_self(returns, semantic) {
+        if !is_self(returns, semantic, checker.locator()) {
             checker.diagnostics.push(Diagnostic::new(
                 NonSelfReturnType {
                     class_name: class_def.name.to_string(),
@@ -241,9 +243,10 @@ fn is_name(expr: &Expr, name: &str) -> bool {
     id.as_str() == name
 }
 
-/// Return `true` if the given expression resolves to `typing.Self`.
-fn is_self(expr: &Expr, semantic: &SemanticModel) -> bool {
-    semantic.match_typing_expr(expr, "Self")
+fn is_self(expr: &Expr, semantic: &SemanticModel, locator: &Locator) -> bool {
+    match_maybe_stringized_annotation(expr, locator, |expr| {
+        semantic.match_typing_expr(expr, "Self")
+    })
 }
 
 /// Return `true` if the given class extends `collections.abc.Iterator`.

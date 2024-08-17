@@ -56,6 +56,7 @@ mod ellipsis_in_non_empty_class_body;
 mod exit_annotations;
 mod future_annotations_in_stub;
 mod generic_not_last_base_class;
+mod helpers;
 mod iter_method_return_iterable;
 mod no_return_argument_annotation;
 mod non_empty_stub_body;

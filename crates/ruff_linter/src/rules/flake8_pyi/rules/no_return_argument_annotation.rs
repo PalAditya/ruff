@@ -2,9 +2,12 @@ use std::fmt;
 
 use ruff_diagnostics::{Diagnostic, Violation};
 use ruff_macros::{derive_message_formats, violation};
-use ruff_python_ast::{AnyParameterRef, Parameters};
+use ruff_python_ast as ast;
+use ruff_python_semantic::SemanticModel;
+use ruff_source_file::Locator;
 use ruff_text_size::Ranged;
 
+use super::helpers::match_maybe_stringized_annotation;
 use crate::checkers::ast::Checker;
 use crate::settings::types::PythonVersion::Py311;
 
@@ -54,14 +57,17 @@ impl Violation for NoReturnArgumentAnnotationInStub {
 }
 
 /// PYI050
-pub(crate) fn no_return_argument_annotation(checker: &mut Checker, parameters: &Parameters) {
+pub(crate) fn no_return_argument_annotation(checker: &mut Checker, parameters: &ast::Parameters) {
     // Ex) def func(arg: NoReturn): ...
     // Ex) def func(arg: NoReturn, /): ...
     // Ex) def func(*, arg: NoReturn): ...
     // Ex) def func(*args: NoReturn): ...
     // Ex) def func(**kwargs: NoReturn): ...
-    for annotation in parameters.iter().filter_map(AnyParameterRef::annotation) {
-        if checker.semantic().match_typing_expr(annotation, "NoReturn") {
+    for annotation in parameters
+        .iter()
+        .filter_map(ast::AnyParameterRef::annotation)
+    {
+        if is_no_return(annotation, checker.semantic(), checker.locator()) {
             checker.diagnostics.push(Diagnostic::new(
                 NoReturnArgumentAnnotationInStub {
                     module: if checker.settings.target_version >= Py311 {
@@ -74,6 +80,12 @@ pub(crate) fn no_return_argument_annotation(checker: &mut Checker, parameters: &
             ));
         }
     }
+}
+
+fn is_no_return(expr: &ast::Expr, semantic: &SemanticModel, locator: &Locator) -> bool {
+    match_maybe_stringized_annotation(expr, locator, |expr| {
+        semantic.match_typing_expr(expr, "NoReturn")
+    })
 }
 
 #[derive(Debug, PartialEq, Eq)]
